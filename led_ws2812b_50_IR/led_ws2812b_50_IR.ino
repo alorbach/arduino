@@ -14,6 +14,8 @@
 // Define the color order, can be different from stripe to stripe!
 #define COLOR_ORDER RGB
 
+#define FASTLED_ALLOW_INTERRUPTS 1 /* Allow Interrupts! */
+
 // How many leds in your strip?
 unsigned int NUM_LEDS = 50;
 
@@ -21,7 +23,7 @@ unsigned int NUM_LEDS = 50;
 uint8_t prefix[] = {'A', 'd', 'a'}, hi, lo, chk, i;
 
 // Baudrate, higher rate allows faster refresh rate and more LEDs (defined in /etc/boblight.conf)
-#define serialRate 230400
+#define serialRate 230400 // 460800 // 230400 //57600, 115200
 
 // Define the array of leds
 CRGB leds[MAX_LEDS];
@@ -39,6 +41,7 @@ byte bBlueStep = 8;
 
 // Turned ON or OFF
 bool bTurnedOn = true;
+bool bIRreceived = false;
 
 void setup() {
   // Uncomment/edit one of the following lines for your leds arrangement.
@@ -81,64 +84,23 @@ void setup() {
   Serial.print("Ada\n"); // Send "Magic Word" string to host
 }
 
-void loop() {
-  // ADA Light HANDLING here!
-  if (Serial.available())
-  {
-    // wait for first byte of Magic Word
-    for (i = 0; i < sizeof prefix; ++i) {
-waitLoop: while (!Serial.available()) ;;
-      // Check next byte in Magic Word
-      if (prefix[i] == Serial.read()) continue;
-      // otherwise, start over
-      i = 0;
-      goto waitLoop;
-    }
-
-    // Hi, Lo, Checksum
-    while (!Serial.available()) ;;
-    hi = Serial.read();
-    while (!Serial.available()) ;;
-    lo = Serial.read();
-    while (!Serial.available()) ;;
-    chk = Serial.read();
-
-    // if checksum does not match go back to wait
-    if (chk != (hi ^ lo ^ 0x55))
-    {
-      i = 0;
-      goto waitLoop;
-    }
-
-    /* Combine HI and LO byte to LED Count */
-    unsigned int ADA_NUMLEDS = (256L * (long)hi + (long)lo + 1L);
-    if ( ADA_NUMLEDS > MAX_LEDS )
-      ADA_NUMLEDS = MAX_LEDS; /* Limit to maximum LEDS! */
-
-    memset(leds, 0, ADA_NUMLEDS /*NUM_LEDS*/ * sizeof(struct CRGB));
-    // read the transmission data and set LED values
-    for (uint8_t i = 0; i < ADA_NUMLEDS /*NUM_LEDS*/; i++) {
-      byte r, g, b;
-      while (!Serial.available());
-      r = Serial.read();
-      while (!Serial.available());
-      g = Serial.read();
-      while (!Serial.available());
-      b = Serial.read();
-      leds[i].r = r;
-      leds[i].g = g;
-      leds[i].b = b;
-    }
-
-    // Show only if turned on
-    if (bTurnedOn) {
-      // shows new values
-      FastLED.show();
-    }
+void checkIRdata()
+{
+  /* Check for IR data */
+  if (!bIRreceived && irrecv.decode(&irresults)) {
+    irrecv.resume(); // Receive the next value
+    bIRreceived = true;
   }
+}
 
-  /* IR Remote Code Handling FIRST! */
-  if (irrecv.decode(&irresults)) {
+void loop() {
+beginLoop:
+  
+  // Perform IR Data check
+  checkIRdata(); 
+
+  /* Check for received IR Remote Code Commands */
+  if (bIRreceived) {
     /*Only DEBUG      
     Serial.println(irresults.value, HEX);
     */
@@ -244,8 +206,70 @@ waitLoop: while (!Serial.available()) ;;
       case 0xFFC837:  /* Smooth */
         break;
     }
+    /* enable receive next IR data */
+    bIRreceived = false; 
+  }
+  
+  // ADA Light HANDLING here!
+  if (Serial.available())
+  {
+    // wait for first byte of Magic Word
+    for (i = 0; i < sizeof prefix; ++i) {
+waitLoop: 
+      while (!Serial.available()) ;;
+      // Check next byte in Magic Word
+      if (prefix[i] == Serial.read()) continue;
+      // otherwise, start over
+      i = 0;
+      goto beginLoop;
+    }
 
-    /* Relay ODROID Commands if configured
+    // Hi, Lo, Checksum
+    while (!Serial.available()) ;;
+    hi = Serial.read();
+    while (!Serial.available()) ;;
+    lo = Serial.read();
+    while (!Serial.available()) ;;
+    chk = Serial.read();
+
+    // if checksum does not match go back to wait
+    if (chk != (hi ^ lo ^ 0x55))
+    {
+      i = 0;
+      goto beginLoop;
+    }
+
+    /* Combine HI and LO byte to LED Count */
+    unsigned int ADA_NUMLEDS = (256L * (long)hi + (long)lo + 1L);
+    if ( ADA_NUMLEDS > MAX_LEDS )
+      ADA_NUMLEDS = MAX_LEDS; /* Limit to maximum LEDS! */
+
+    memset(leds, 0, ADA_NUMLEDS /*NUM_LEDS*/ * sizeof(struct CRGB));
+    // read the transmission data and set LED values
+    for (uint8_t i = 0; i < ADA_NUMLEDS /*NUM_LEDS*/; i++) {
+      byte r, g, b;
+      while (!Serial.available());
+      r = Serial.read();
+      while (!Serial.available());
+      g = Serial.read();
+      while (!Serial.available());
+      b = Serial.read();
+      leds[i].r = r;
+      leds[i].g = g;
+      leds[i].b = b;
+    }
+    
+    // Show only if turned on
+    if (bTurnedOn) {
+      // shows new values
+      FastLED.show();
+    }
+
+    checkIRdata(); // Perform IR Data check    
+  }
+
+
+    /* Future Relay for ODROID Commands if configured
       if (RELAY_ODROID_IR == 1){
       switch(uilastir)
       {
@@ -264,8 +288,6 @@ waitLoop: while (!Serial.available()) ;;
       }
     */
 
-    irrecv.resume(); // Receive the next value
-  }
   
 }
 
