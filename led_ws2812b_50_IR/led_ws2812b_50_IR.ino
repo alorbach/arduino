@@ -2,7 +2,8 @@
 #include <IRremote.h>
 
 // Whats the maximum for LEDS
-#define MAX_LEDS 120
+// 130 max für 168, more for 328
+#define MAX_LEDS 130
 
 // For led chips like Neopixels, which have a data line, ground, and power, you just
 // need to define DATA_PIN.  For led chipsets that are SPI based (four wires - data, clock,
@@ -23,7 +24,8 @@ unsigned int NUM_LEDS = 50;
 uint8_t prefix[] = {'A', 'd', 'a'}, hi, lo, chk, i;
 
 // Baudrate, higher rate allows faster refresh rate and more LEDs (defined in /etc/boblight.conf)
-#define serialRate 230400 // 460800 // 230400 //57600, 115200
+#define serialRate 115200 // 460800 // 230400 //57600, 115200
+// 115200 appears to be max on Raspberry / NANO
 
 // Define the array of leds
 CRGB leds[MAX_LEDS];
@@ -70,11 +72,11 @@ void setup() {
 
   // initial RGB flash
   LEDS.showColor(CRGB(255, 0, 0));
-  delay(100);
+  delay(10);
   LEDS.showColor(CRGB(0, 255, 0));
-  delay(100);
+  delay(10);
   LEDS.showColor(CRGB(0, 0, 255));
-  delay(100);
+  delay(10);
   LEDS.showColor(CRGB(0, 0, 0));
 
   // Start IR Receiver First!
@@ -266,27 +268,31 @@ waitLoop:
     }
 
     checkIRdata(); // Perform IR Data check    
+
+    // Flush all other data
+    while(Serial.available() > 0) {
+      char t = Serial.read();
+    } 
   }
 
-
-    /* Future Relay for ODROID Commands if configured
-      if (RELAY_ODROID_IR == 1){
-      switch(uilastir)
-      {
-        case 0x4DB23BC4:  /* Power Toggle /
-        case 0x4DB241BE:  /* Home /
-        case 0x4DB253AC:  /* Up /
-        case 0x4DB24BB4:  /* Down /
-        case 0x4DB29966:  /* Left /
-        case 0x4DB2837C:  /* Right /
-        case 0x4DB2738C:  /* Ok /
-        case 0x4DB259A6:  /* Exit /
-        case 0x4DB2A35C:  /* Menu /
-          // TODO ReSend to IR transmitter
-          break;
-      }
-      }
-    */
+  /* Future Relay for ODROID Commands if configured
+    if (RELAY_ODROID_IR == 1){
+    switch(uilastir)
+    {
+      case 0x4DB23BC4:  /* Power Toggle /
+      case 0x4DB241BE:  /* Home /
+      case 0x4DB253AC:  /* Up /
+      case 0x4DB24BB4:  /* Down /
+      case 0x4DB29966:  /* Left /
+      case 0x4DB2837C:  /* Right /
+      case 0x4DB2738C:  /* Ok /
+      case 0x4DB259A6:  /* Exit /
+      case 0x4DB2A35C:  /* Menu /
+        // TODO ReSend to IR transmitter
+        break;
+    }
+    }
+  */
 
   
 }
